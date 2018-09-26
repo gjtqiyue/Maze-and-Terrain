@@ -18,11 +18,10 @@ public class FirstPersonMovement : MonoBehaviour {
     private Rigidbody rb;
     private float horizontal;
     private float vertical;
-    private bool jumpRequest;
     private bool canJump;
     private bool onGround;
-    
-    
+    private float fireRate = 0.5f;
+    private float lastTimeFire;
 
     private void Awake()
     {
@@ -43,6 +42,7 @@ public class FirstPersonMovement : MonoBehaviour {
     {
         horizontal = Input.GetAxis("Horizontal");
         vertical = Input.GetAxis("Vertical");
+        isGrounded();
 
         if (Input.GetButtonDown("Jump"))
         {
@@ -53,17 +53,19 @@ public class FirstPersonMovement : MonoBehaviour {
         {
             canJump = true;
         }
-        Debug.Log(isGrounded());
+        
 
-        if (Input.GetKeyDown(KeyCode.F) && ammo > 0)
+        if (Input.GetKeyDown(KeyCode.F) && ammo > 0 && Time.time > (fireRate + lastTimeFire))
         {
             launcher.LaunchProjectile();
+            lastTimeFire = Time.time;
             ammo--;
         }
     }
 
     // Update is called once per frame
     void FixedUpdate () {
+        
         if (canMove)
         {
             Move();
@@ -96,7 +98,7 @@ public class FirstPersonMovement : MonoBehaviour {
 
             rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
 
-            jumpRequest = false;
+            
         }
     }
 
@@ -110,7 +112,6 @@ public class FirstPersonMovement : MonoBehaviour {
         }
         else
         {
-            
             canMove = true;
             return true;
         }

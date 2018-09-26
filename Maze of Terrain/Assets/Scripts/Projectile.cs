@@ -11,7 +11,7 @@ public class Projectile : MonoBehaviour {
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.tag == "wall")
+        if (collision.gameObject.tag == "Wall")
         {
             Destroy(this.gameObject);
         }
