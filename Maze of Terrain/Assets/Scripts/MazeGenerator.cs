@@ -6,28 +6,32 @@ using Random = UnityEngine.Random;
 
 public class MazeGenerator : MonoBehaviour {
 
-    public static readonly int ROW_LENGTH = 8;
-    public static readonly float GRID_LENGTH = 5f;
+    public static readonly int ROW_LENGTH = 8;          // the fixed width of the maze
+    public static readonly float GRID_LENGTH = 5f;      // the fixed grid length per unit
 
     public static MazeGenerator instance = null;
 
-    public Vector3 origin;
-    public WallScript wall;
-    public GameObject floor;
-    public Collectable collectable;
+    public Vector3 origin;                              // origin poing of the grid
+    public WallScript wall;                             // wall reference
+    public GameObject floor;                            // floor reference
+    public Collectable collectable;                     // collectable reference
 
-    private ArrayList maze;
-    private Dictionary<int, List<Cell>> mazeCell;
-    private int rowIndex = 0;
-    private int uniqueId = 0;
-    private int[] wallInfo;
+    private ArrayList maze;                             // it stores the structure of current maze
+    private Dictionary<int, List<Cell>> mazeCell;       // it stores all the cells of maze in its own set
+    private ArrayList mazeObjects;                      // it stores all the instantiated maze objects in scene
+    private int rowIndex = 0;                           // current row index
+    private int uniqueId = 0;                           // current unique id for the cell
+    private int[] wallInfo;                             // an array that stores the info of generation of the front wall in that row
 
+    // this class represent a grid cell in a maze
+    // each row has 8 cells
     protected class Cell
     {
-        public int m_id;
-        public bool m_frontWall;
-        public bool m_leftWall;
+        public int m_id;            // unique id of this cell
+        public bool m_frontWall;    // if this cell has front wall
+        public bool m_leftWall;     // if this cell has left wall
 
+        // constructor
         public Cell(int id, bool hasFront, bool hasLeft)
         {
             m_id = id;
@@ -42,43 +46,76 @@ public class MazeGenerator : MonoBehaviour {
             instance = this;
         else
             Destroy(gameObject);
-    }
 
-   
-
-    private void Start()
-    {
+        // initialize data structure
         wallInfo = new int[ROW_LENGTH];
         mazeCell = new Dictionary<int, List<Cell>>();
         maze = new ArrayList();
-
-        //for (int i=0; i < 5; i++)
-        //{
-        //    Debug.Log(getUniqueId());
-        //}
-        
+        mazeObjects = new ArrayList();
     }
 
+    public void InitializeMaze()
+    {
+        // clear the mazeCell
+        if (mazeCell.Count > 0)
+        {
+            foreach (int key in mazeCell.Keys)
+            {
+                mazeCell[key].Clear();
+            }
+
+            mazeCell.Clear();
+        }
+
+        // clear the maze array
+        maze.Clear();
+
+        // set the ID back to 0
+        uniqueId = 0;
+
+        // rowIndex back to 0
+        rowIndex = 0;
+
+        // delete all the objects
+        if (mazeObjects.Count > 0)
+        {
+            for (int i = 0; i < mazeObjects.Count; i++)
+            {
+                Destroy((GameObject)mazeObjects[i]);
+            }
+            mazeObjects.Clear();
+        }
+    }
+
+    /* main generate method
+     * generate a row and merge cells randomly
+     * then construct it in the real map
+     */
     public void RandomGenerate()
     {
         Cell[] row;
 
         // create a row based on the rowindex
+        // the first row has no previous row so it is easier than the inner rows
         if (rowIndex == 0)
         {
+            // if the index is 0, which means we want to create the first row
+
             row = CreateRow(0);
 
             row = Merge(row);
 
             // add the complete row to the map
             maze.Add(row);
+
+            // increase the rowindex
             rowIndex++;
 
             row = ExtendWall(row);
 
+            
+            // the code below simpliy print out the generation result in the console
             string rowString = "";
-            
-            
             for (int i = 0; i < row.Length - 1; i++)
             {
                 if (row[i].m_id != row[i + 1].m_id)
@@ -93,27 +130,15 @@ public class MazeGenerator : MonoBehaviour {
             }
             rowString = string.Concat(rowString, row[7].m_id);
             print(rowString);
+
             PrintWallInfo();
         }
         else
         {
-            row = CreateRow(3);
+            // if the first row is already created, we come to here, generate inner rows
+            // the steps are pretty similar to the above, but we pass differenct param to the CreateRow() method
 
-            string wallString = "";
-            for (int i = 0; i < row.Length - 1; i++)
-            {
-                if (row[i].m_id != row[i + 1].m_id)
-                {
-                    wallString = string.Concat(wallString, row[i].m_id);
-                    wallString = string.Concat(wallString, "|");
-                }
-                else
-                {
-                    wallString = string.Concat(wallString, row[i].m_id);
-                }
-            }
-            wallString = string.Concat(wallString, row[7].m_id);
-            print(wallString);
+            row = CreateRow(1);
 
             Cell[] mergeCell = Merge(row);
 
@@ -122,7 +147,8 @@ public class MazeGenerator : MonoBehaviour {
             rowIndex++;
 
             row = ExtendWall(row);
-
+            
+            // print out the merged row infor to the console
             string mergeString = "";
             for (int i = 0; i < row.Length - 1; i++)
             {
@@ -147,6 +173,7 @@ public class MazeGenerator : MonoBehaviour {
         GenerateRow(rowIndex);
     }
 
+    // a helper method printing out the front wall data of the current row
     private void PrintWallInfo()
     {
         string wall = "";
@@ -164,18 +191,18 @@ public class MazeGenerator : MonoBehaviour {
         print(wall);
     }
 
+    // Create a row 
     private Cell[] CreateRow(int rowType)
     {
         Cell[] newRow = new Cell[ROW_LENGTH];
         switch (rowType)
         {
-            // create the first row
+            // create the first row get generate a cell in each array slot
             case 0:
                 for (int i = 0; i < newRow.Length; i++)
                 {
                     int id = getUniqueId();
                     newRow[i] = new Cell(id, true, true);
-
 
                     // create new list
                     mazeCell.Add(newRow[i].m_id, new List<Cell>());
@@ -187,7 +214,9 @@ public class MazeGenerator : MonoBehaviour {
    
             // create inner row
             default:
-                    // create the second row based on the testRow
+                    // create the second row based on the wall information
+                    // if in this slot there is a 0, then we know this cell must have the same number as the last row
+                    // if there is a 1, then we know a wall is there, and we assign a new set number to the new cell
                     for (int i = 0; i < wallInfo.Length; i++)
                     {
 
@@ -215,6 +244,7 @@ public class MazeGenerator : MonoBehaviour {
             }
     }
 
+    // Merge this cell horizontally in a random way
     private Cell[] Merge(Cell[] row)
     {
         // check the row
@@ -225,11 +255,11 @@ public class MazeGenerator : MonoBehaviour {
             if (row[i].m_id != row[i + 1].m_id)
             {
                 int choice = Random.Range(0, 3);
-                
+
                 // merge
                 if (choice == 1)
                 {
-                    // move everything in that set to the other set
+                    // move everything in that set to the set it's merging to
                     int newId = row[i].m_id;
                     int oldId = row[i + 1].m_id;
                     row[i].m_leftWall = false;
@@ -241,24 +271,22 @@ public class MazeGenerator : MonoBehaviour {
                         mazeCell[newId].Add(temp);
                     }
 
+                    // then we clear the old set because everything in it has been moved to the new set
                     mazeCell[oldId].Clear();
                 }
-                               
-            }
-            else
-            {
-                row[i].m_leftWall = false;
+
             }
         }
         return row;   
     }
 
+    // the maze must have a way out, so we determine vertical connection to the next row randomly
     private Cell[] ExtendWall(Cell[] row)
     {
-        // determine vertical connection randomly
-        // record all the set number in the row
+        // the dictionary stores the set nunmber of each cell and put the cell with same set number into one category
         Dictionary<int, List<Cell>> map = new Dictionary<int, List<Cell>>();
 
+        // first we iterate through the row and put them into the dictionary
         for (int i = 0; i < row.Length; i++)
         {
             int setId = row[i].m_id;
@@ -274,6 +302,9 @@ public class MazeGenerator : MonoBehaviour {
         }
 
         // determine a opening randomly for each set
+        // we take a random number based on the count of element in that category
+        // then we have a random index number
+        // and we set the cell corresponding to the number to have no front wall, meaning it's a open route
         foreach (int key in map.Keys)
         {
             int randomOpening = Random.Range(0, map[key].Count);
@@ -283,8 +314,8 @@ public class MazeGenerator : MonoBehaviour {
         }
 
         // do the rest
-        // get a array of the info of walls of next row
-        
+        // after we decide each opening of each set, we then randomly choose the remaining wall to have openings as well
+        // and we update the wall info
         for (int i = 0; i < row.Length; i++)
         {
             if (row[i].m_frontWall)
@@ -306,6 +337,8 @@ public class MazeGenerator : MonoBehaviour {
         return row;
     }
 
+    // provide a unique set id
+    // if there is any exsiting id in the dictionary with no element, we then reuse it to prevent a large amount of keys
     private int getUniqueId()
     {
         int validId = 0;
@@ -333,56 +366,71 @@ public class MazeGenerator : MonoBehaviour {
     // generate the row in the world based on the row created
     private void GenerateRow(int rowIndex)
     {
+        // calculate the offset from the origin
         Vector3 startPoint = origin + Vector3.forward * GRID_LENGTH * rowIndex;
 
         // create floor
         for (int i = 0; i < ROW_LENGTH; i++)
         {
-            Instantiate(floor, startPoint + Vector3.left * GRID_LENGTH * i, Quaternion.identity);
+            GameObject floorObject = Instantiate(floor, startPoint + Vector3.left * GRID_LENGTH * i, Quaternion.identity);
+            mazeObjects.Add(floorObject.gameObject);
 
-            // generate collectable randomly on the floor
+            // generate collectable randomly on the floor, probability of 1/3
             int result = Random.Range(0, 3);
             if (result == 1)
             {
-                Instantiate(collectable, startPoint + Vector3.left * GRID_LENGTH * i + new Vector3(0f, 1f, 0f), Quaternion.identity);
+                Collectable collectableObject = Instantiate(collectable, startPoint + Vector3.left * GRID_LENGTH * i + new Vector3(0f, 1f, 0f), Quaternion.identity);
+                mazeObjects.Add(collectableObject.gameObject);
             }
         }
 
-        //create right side wall
-        Instantiate<WallScript>(wall, startPoint + new Vector3((GRID_LENGTH / 2), (GRID_LENGTH / 2), 0f), Quaternion.Euler(0, 90, 0));
+        //create right side walls and set its health to be 50
+        WallScript wallobject = Instantiate<WallScript>(wall, startPoint + new Vector3((GRID_LENGTH / 2), (GRID_LENGTH / 2), 0f), Quaternion.Euler(0, 90, 0));
+        wallobject.SetMaxHealth(50);
+        mazeObjects.Add(wallobject.gameObject);
 
         //create walls in the row
         Cell[] row = (Cell[])maze[rowIndex - 1];
         for (int i = 0; i < row.Length; i++)
         {
             // if two cells are not in the same set
-            // generate the left wall
+            // generate the left walls
             if (row[i].m_leftWall)
             {
                 Vector3 spawnPoint = startPoint + Vector3.left * GRID_LENGTH * i + new Vector3(-(GRID_LENGTH / 2), (GRID_LENGTH / 2), 0f);
-                Instantiate<WallScript>(wall, spawnPoint, Quaternion.Euler(0, 90, 0));
+                WallScript leftWall = Instantiate<WallScript>(wall, spawnPoint, Quaternion.Euler(0, 90, 0));
+
+                // the last wall generated is a side wall and we don't want the player to destroy it by setting the health high
+                if(i == ROW_LENGTH - 1)
+                {
+                    leftWall.SetMaxHealth(50);
+                }
+
+                mazeObjects.Add(leftWall.gameObject);
             }
 
-            // generate the front wall
+            // generate the front walls
             if (row[i].m_frontWall)
             {
                 Vector3 spawnPoint = startPoint + Vector3.left * GRID_LENGTH * i + new Vector3(0, (GRID_LENGTH / 2), (GRID_LENGTH / 2));
-                Instantiate<WallScript>(wall, spawnPoint, Quaternion.identity);
+                WallScript frontWall = Instantiate<WallScript>(wall, spawnPoint, Quaternion.identity);
+                mazeObjects.Add(frontWall.gameObject);
             }
         }
-
-        //create left side wall
-        //Vector3 endPoint = startPoint + Vector3.left * GRID_LENGTH * (ROW_LENGTH - 1) + new Vector3(-(GRID_LENGTH / 2), (GRID_LENGTH / 2), 0f);
-        //Instantiate<WallScript>(wall, endPoint, Quaternion.Euler(0, 90, 0));
     }
 
     internal bool EndMaze()
     {
+        // the player can only end the maze when it has at least one row
         if (rowIndex > 0)
         {
+            // then we create another inner row
+            // but every cell in this row has a fornt wall to stop the player
+            // so we don't call ExtendWall() in this method
+
             Cell[] lastRow = new Cell[ROW_LENGTH];
 
-            lastRow = CreateRow(3);
+            lastRow = CreateRow(1);
 
             EndMerge(lastRow);
 
@@ -409,6 +457,7 @@ public class MazeGenerator : MonoBehaviour {
                 // move everything in that set to the other set
                 int newId = lastRow[i].m_id;
                 int oldId = lastRow[i + 1].m_id;
+                lastRow[i].m_leftWall = false;
                 foreach (Cell cell in mazeCell[oldId])
                 {
                     Cell temp = cell;
@@ -419,8 +468,10 @@ public class MazeGenerator : MonoBehaviour {
 
                 mazeCell[oldId].Clear();
             }
-            lastRow[i].m_leftWall = false;
+            
         }
         lastRow[7].m_leftWall = true;
     }
+
+    
 }
